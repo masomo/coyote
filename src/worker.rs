@@ -1,10 +1,22 @@
 use std::process::Stdio;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{
+    anyhow,
+    Result,
+};
 use tokio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
-use tokio::process::{ChildStdin, ChildStdout, Command};
+use tokio::io::{
+    AsyncBufReadExt,
+    AsyncWriteExt,
+    BufReader,
+    Lines,
+};
+use tokio::process::{
+    ChildStdin,
+    ChildStdout,
+    Command,
+};
 use tokio::time::timeout;
 
 pub struct Worker {
@@ -32,18 +44,23 @@ impl Worker {
         let reader = BufReader::new(stdout).lines();
 
         tokio::spawn(async move {
-            let status = child.await.expect("child process encountered an error");
+            let status =
+                child.await.expect("child process encountered an error");
             println!("child status: {}", status);
         });
 
         Ok(Self { reader, writer })
     }
 
-    pub async fn exec(&mut self, payload: &str) -> Result<String> {
+    pub async fn exec(
+        &mut self,
+        payload: &str,
+    ) -> Result<String> {
         self.writer.write(payload.as_bytes()).await?;
         self.writer.write("\n".as_bytes()).await?;
 
-        match timeout(Duration::from_millis(100), self.reader.next_line()).await {
+        match timeout(Duration::from_millis(100), self.reader.next_line()).await
+        {
             Ok(Ok(Some(output))) => Ok(output),
             Ok(_) => Err(anyhow!("could not read output from worker")),
             Err(_) => Err(anyhow!("worker timeout")),
