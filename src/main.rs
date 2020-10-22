@@ -16,6 +16,7 @@ use hyper::{
     Server,
     StatusCode,
 };
+use log;
 use tokio::sync::Mutex;
 
 mod clap;
@@ -47,6 +48,8 @@ async fn handle(
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = clap::Opt::args();
+    env_logger::init();
+
     let worker = Arc::new(Mutex::new(worker::Worker::new()?));
 
     let addr = opts.http_listen.parse()?;
@@ -60,6 +63,7 @@ async fn main() -> Result<()> {
         }
     });
 
+    log::info!("Serving coyote on: {}", &addr);
     let server = Server::bind(&addr).serve(make_svc);
     server.await?;
     Ok(())
