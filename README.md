@@ -14,4 +14,5 @@ Blazing Fast PHP application server
 - [ ] Reload Configuration on Live
 - [ ] Prometheus Metrics integration
 - [ ] Installation and Service Design
+- [ ] Authorization for Access
 
