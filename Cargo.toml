@@ -7,9 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hyper = "0.13"
-tokio = { version = "0.2.0", features = ["full"] }
+hyper = { git = "https://github.com/hyperium/hyper" }
+tokio = { version = "0.3.0", features = ["full"] }
 anyhow = "1.0.33"
 structopt = "0.3.20"
 log = "0.4.11"
 env_logger = "0.8.1"
+num-traits = "0.2"
+num-derive = "0.3"
