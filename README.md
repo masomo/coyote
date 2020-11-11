@@ -15,4 +15,3 @@ Blazing Fast PHP application server
 - [ ] Prometheus Metrics integration
 - [ ] Installation and Service Design
 - [ ] Authorization for Access
-
