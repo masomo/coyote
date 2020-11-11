@@ -19,7 +19,6 @@ use hyper::{
     Server,
     StatusCode,
 };
-use log;
 use tokio::sync::Mutex;
 #[macro_use]
 extern crate num_derive;

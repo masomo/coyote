@@ -41,25 +41,20 @@ impl Linker {
         self: Arc<Self>,
         mut connections: Pin<Box<dyn Stream<Item = Connection> + Send>>,
     ) {
-        let linker = self.clone();
+        let linker = self;
         tokio::spawn(async move {
             'accept_connections: while let Some(conn) = connections.next().await
             {
                 {
                     let mut waiters = linker.waiters.lock().await;
-                    match waiters.remove(&conn.pid()) {
-                        Some(waiter) => {
-                            match waiter.send(conn) {
-                                Ok(()) => {}
-                                Err(_) => {
-                                    log::error!(
-                                        "could not send conn to waiter",
-                                    );
-                                }
+                    if let Some(waiter) = waiters.remove(&conn.pid()) {
+                        match waiter.send(conn) {
+                            Ok(()) => {}
+                            Err(_) => {
+                                log::error!("could not send conn to waiter",);
                             }
-                            continue 'accept_connections;
                         }
-                        None => {}
+                        continue 'accept_connections;
                     }
                 }
 
@@ -77,12 +72,9 @@ impl Linker {
     ) -> Result<Connection> {
         {
             let mut queue = self.queue.lock().await;
-            match queue.iter().position(|x| x.pid() == pid) {
-                Some(id) => {
-                    let conn = queue.remove(id);
-                    return Ok(conn);
-                }
-                None => {}
+            if let Some(id) = queue.iter().position(|x| x.pid() == pid) {
+                let conn = queue.remove(id);
+                return Ok(conn);
             }
         }
 

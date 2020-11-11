@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+
 use std::mem;
 
 use anyhow::{
@@ -90,13 +90,13 @@ impl Message {
 
         // TODO: read full header, that contains type+length for req&res.
         let ty = MessageType::from_u8(src.read_u8().await?)
-            .ok_or(anyhow!("unexpected message type"))?;
+            .ok_or_else(|| anyhow!("unexpected message type"))?;
 
         return match ty {
             MessageType::Identity => {
                 let mut buf = [0; mem::size_of::<Pid>()];
                 src.read_exact(&mut buf).await?;
-                Ok(Message::Identity(Pid::from_be_bytes(buf.try_into()?)))
+                Ok(Message::Identity(Pid::from_be_bytes(buf)))
             }
             MessageType::Request => {
                 read_u8_vec(src).await.map(Request).map(Message::Request)
@@ -111,7 +111,7 @@ impl Message {
 
             let mut size_buf = [0; mem::size_of::<usize>()];
             src.read_exact(&mut size_buf).await?;
-            let size = usize::from_be_bytes(size_buf.try_into()?);
+            let size = usize::from_be_bytes(size_buf);
 
             let mut buf = vec![0; size];
             src.read_exact(&mut buf).await?;

@@ -1,4 +1,5 @@
 mod linker;
+#[allow(clippy::module_inception)]
 mod worker;
 
 pub use linker::Linker;

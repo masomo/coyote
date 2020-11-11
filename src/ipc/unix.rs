@@ -4,8 +4,7 @@ use anyhow::{
     anyhow,
     Result,
 };
-use log;
-use tokio;
+
 use tokio::net::{
     UnixListener,
     UnixStream,
@@ -63,7 +62,7 @@ impl Connection {
 
         match Message::read_from(&mut self.stream).await? {
             Message::Response(response) => Ok(response),
-            message @ _ => Err(anyhow!("unexpected message: {:?}", message)),
+            message => Err(anyhow!("unexpected message: {:?}", message)),
         }
     }
 }
