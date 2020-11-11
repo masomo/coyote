@@ -1,9 +1,12 @@
+#![feature(test)]
+
 use std::{
     convert::Infallible,
     sync::Arc,
 };
 
 use anyhow::Result;
+use env_logger::Env;
 use hyper::service::{
     make_service_fn,
     service_fn,
@@ -18,8 +21,12 @@ use hyper::{
 };
 use log;
 use tokio::sync::Mutex;
+#[macro_use]
+extern crate num_derive;
+extern crate test;
 
-mod clap;
+mod ipc;
+mod opt;
 mod worker;
 
 async fn handle(
@@ -47,10 +54,16 @@ async fn handle(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = clap::Opt::args();
-    env_logger::init();
+    let opts = opt::Opt::args();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .init();
 
-    let worker = Arc::new(Mutex::new(worker::Worker::new()?));
+    let connections = ipc::listen(&opts.unix_socket)?;
+    let linker = worker::Linker::new(Box::pin(connections));
+    let worker =
+        worker::Worker::new(&opts.worker_script, &opts.unix_socket, linker)
+            .await?;
+    let worker = Arc::new(Mutex::new(worker));
 
     let addr = opts.http_listen.parse()?;
 
