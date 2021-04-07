@@ -40,7 +40,8 @@ impl Worker {
             .ok_or_else(|| anyhow!("could not get pid of worker"))?;
 
         let conn =
-            timeout(Duration::from_millis(2000), linker.get(pid)).await??;
+            timeout(Duration::from_millis(2000), linker.get(pid as usize))
+                .await??;
 
         Ok(Self {
             _child: child,

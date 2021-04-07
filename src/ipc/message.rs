@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::mem;
 
 use anyhow::{
@@ -12,7 +13,7 @@ use tokio::io::{
     AsyncWriteExt,
 };
 
-pub type Pid = u32;
+pub type Pid = usize;
 
 #[repr(u8)]
 #[derive(Debug, FromPrimitive)]
@@ -36,6 +37,9 @@ pub enum Message {
 }
 
 impl Message {
+    const HEADER_SIZE: usize =
+        mem::size_of::<MessageType>() + mem::size_of::<usize>();
+
     pub async fn write_to(
         self,
         dst: impl AsyncWrite,
@@ -44,9 +48,7 @@ impl Message {
 
         match self {
             Message::Identity(id) => {
-                let mut buf = Vec::with_capacity(
-                    mem::size_of::<MessageType>() + mem::size_of::<Pid>(),
-                );
+                let mut buf = Vec::with_capacity(Message::HEADER_SIZE);
                 buf.push(MessageType::Identity as u8);
                 buf.extend(&id.to_be_bytes());
                 dst.write_all(&buf).await?;
@@ -71,9 +73,7 @@ impl Message {
         ) -> Result<()> {
             tokio::pin!(dst);
 
-            let mut header = Vec::with_capacity(
-                mem::size_of::<MessageType>() + mem::size_of::<usize>(),
-            );
+            let mut header = Vec::with_capacity(Message::HEADER_SIZE);
             header.push(ty as u8);
             header.extend(&buf.len().to_be_bytes());
             dst.write_all(&header).await?;
@@ -87,30 +87,36 @@ impl Message {
     pub async fn read_from(src: impl AsyncRead) -> Result<Message> {
         tokio::pin!(src);
 
-        // TODO: read full header, that contains type+length for req&res.
-        let ty = MessageType::from_u8(src.read_u8().await?)
-            .ok_or_else(|| anyhow!("unexpected message type"))?;
+        let mut header = vec![0u8; Message::HEADER_SIZE];
+        src.read_exact(&mut header).await?;
+
+        let ty = MessageType::from_u8(
+            *header
+                .first()
+                .ok_or_else(|| anyhow!("missing message type"))?,
+        )
+        .ok_or_else(|| anyhow!("unexpected message type"))?;
+        let size = usize::from_be_bytes(
+            header[mem::size_of::<MessageType>()..].try_into()?,
+        );
 
         return match ty {
-            MessageType::Identity => {
-                let mut buf = [0; mem::size_of::<Pid>()];
-                src.read_exact(&mut buf).await?;
-                Ok(Message::Identity(Pid::from_be_bytes(buf)))
-            }
-            MessageType::Request => {
-                read_u8_vec(src).await.map(Request).map(Message::Request)
-            }
-            MessageType::Response => {
-                read_u8_vec(src).await.map(Response).map(Message::Response)
-            }
+            MessageType::Identity => Ok(Message::Identity(size as Pid)),
+            MessageType::Request => read_u8_vec(size, src)
+                .await
+                .map(Request)
+                .map(Message::Request),
+            MessageType::Response => read_u8_vec(size, src)
+                .await
+                .map(Response)
+                .map(Message::Response),
         };
 
-        async fn read_u8_vec(src: impl AsyncRead) -> Result<Vec<u8>> {
+        async fn read_u8_vec(
+            size: usize,
+            src: impl AsyncRead,
+        ) -> Result<Vec<u8>> {
             tokio::pin!(src);
-
-            let mut size_buf = [0; mem::size_of::<usize>()];
-            src.read_exact(&mut size_buf).await?;
-            let size = usize::from_be_bytes(size_buf);
 
             let mut buf = vec![0; size];
             src.read_exact(&mut buf).await?;

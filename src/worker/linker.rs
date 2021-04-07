@@ -6,13 +6,13 @@ use anyhow::{
     anyhow,
     Result,
 };
-use tokio::stream::{
-    Stream,
-    StreamExt,
-};
 use tokio::sync::{
     oneshot,
     Mutex,
+};
+use tokio_stream::{
+    Stream,
+    StreamExt,
 };
 
 use crate::ipc::{

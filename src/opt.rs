@@ -14,6 +14,10 @@ pub struct Opt {
     /// PHP Worker script to use.
     #[structopt(long, default_value = "worker.php")]
     pub worker_script: String,
+
+    /// PHP Worker count.
+    #[structopt(long, default_value = "60")]
+    pub worker_count: usize,
 }
 
 impl Opt {
