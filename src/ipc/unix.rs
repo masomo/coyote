@@ -9,12 +9,16 @@ use tokio::net::{
     UnixListener,
     UnixStream,
 };
-use tokio::stream::{
+use tokio::sync::mpsc;
+use tokio::time::timeout;
+use tokio_stream::{
+    wrappers::{
+        UnboundedReceiverStream,
+        UnixListenerStream,
+    },
     Stream,
     StreamExt,
 };
-use tokio::sync::mpsc;
-use tokio::time::timeout;
 
 use super::message::{
     Message,
@@ -69,7 +73,7 @@ impl Connection {
 
 pub fn listen(path: &str) -> Result<impl Stream<Item = Connection> + Unpin> {
     let _ = std::fs::remove_file(path);
-    let mut listener = UnixListener::bind(path)?;
+    let mut listener = UnixListenerStream::new(UnixListener::bind(path)?);
     let (tx, rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
@@ -104,7 +108,7 @@ pub fn listen(path: &str) -> Result<impl Stream<Item = Connection> + Unpin> {
         }
     });
 
-    Ok(rx)
+    Ok(UnboundedReceiverStream::new(rx))
 }
 
 #[cfg(test)]

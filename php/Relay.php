@@ -15,6 +15,7 @@ class Relay
 
     private const TYPE_LENGTH = 1;
     private const SIZE_LENGTH = 8;
+    private const HEADER_LENGTH = Relay::TYPE_LENGTH + Relay::SIZE_LENGTH;
     private $fp;
 
     public function __construct(string $sock, int $connectTimeout = 10)
@@ -30,11 +31,10 @@ class Relay
     public function next(): ?string
     {
         try {
-            $type = $this->readType();
+            [$type, $size] = $this->readHeader();
             if ($type !== self::MESSAGE_TYPE_REQUEST) {
                 throw new \Exception("expected Request message, got: %d", $type);
             }
-            $size = $this->readSize();
             $body = $this->read($size);
             return $body;
         } catch (ReadException $e) {
@@ -53,29 +53,19 @@ class Relay
         fclose($this->fp);
     }
 
-    private function readType(): int
+    private function readHeader(): array
     {
-        $data = $this->read(self::TYPE_LENGTH);
-        $type = unpack("Ctype", $data);
-        if (false === $type) {
-            throw new \Exception(sprintf("could not unpack type: %s", $data));
+        $data = $this->read(self::HEADER_LENGTH);
+        $header = unpack("Ctype/Jsize", $data);
+        if (false === $header) {
+            throw new \Exception(sprintf("could not unpack header: %s", $data));
         }
-        return $type["type"];
-    }
-
-    private function readSize(): int
-    {
-        $data = $this->read(self::SIZE_LENGTH);
-        $size = unpack("Jsize", $data);
-        if (false === $size) {
-            throw new \Exception(sprintf("could not unpack size: %s", $data));
-        }
-        return $size["size"];
+        return [$header["type"], $header["size"]];
     }
 
     private function sendIdentity()
     {
-        $this->write(self::MESSAGE_TYPE_IDENTITY, pack("N", getmypid()));
+        $this->write(self::MESSAGE_TYPE_IDENTITY, (string)getmypid());
     }
 
     private function read(int $length): string
@@ -99,13 +89,11 @@ class Relay
     {
         switch ($type) {
             case self::MESSAGE_TYPE_IDENTITY:
-                fwrite($this->fp, pack("C", $type));
-                fwrite($this->fp, $payload);
+                fwrite($this->fp, pack("CJ", $type, $payload));
                 break;
 
             case self::MESSAGE_TYPE_RESPONSE:
-                fwrite($this->fp, pack("C", $type));
-                fwrite($this->fp, pack("J", mb_strlen($payload, "8bit")));
+                fwrite($this->fp, pack("CJ", $type, mb_strlen($payload, "8bit")));
                 fwrite($this->fp, $payload);
                 break;
             
