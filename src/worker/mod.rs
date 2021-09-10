@@ -1,3 +1,4 @@
+mod ipc;
 mod linker;
 pub mod pool;
 #[allow(clippy::module_inception)]

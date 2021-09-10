@@ -1,6 +1,5 @@
 use anyhow::{
     anyhow,
-    bail,
     Result,
 };
 use async_trait::async_trait;
@@ -12,8 +11,12 @@ use tokio::sync::{
 };
 
 use super::Pool;
-use crate::ipc::listen;
 use crate::worker::{
+    ipc::{
+        listen,
+        Request,
+        Response,
+    },
     Linker,
     Worker,
 };
@@ -30,7 +33,7 @@ impl Static {
         size: usize,
     ) -> Result<Self> {
         let connections = listen(socket)?;
-        let linker = Linker::new(Box::pin(connections));
+        let linker = Linker::new(connections);
 
         let workers = join_all(
             (0..size)
@@ -40,12 +43,8 @@ impl Static {
 
         let workers = workers
             .into_iter()
-            .filter_map(|w| w.ok())
-            .collect::<Vec<_>>();
-        if workers.len() != size {
-            // TODO: return worker errors.
-            bail!("could not start all workers");
-        }
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| anyhow!("could not create worker: {}", err))?;
 
         let (worker_tx, worker_rx) = mpsc::channel(size);
         for worker in workers {
@@ -65,8 +64,8 @@ impl Static {
 impl Pool for Static {
     async fn exec(
         &self,
-        req: String,
-    ) -> Result<String> {
+        req: Request,
+    ) -> Result<Response> {
         // TODO: add timeout.
         // TODO: WorkerGuard?
         let mut worker = {
@@ -76,7 +75,7 @@ impl Pool for Static {
                 .ok_or_else(|| anyhow!("could not get free worker"))
         }?;
 
-        let response = worker.exec(&req).await;
+        let response = worker.exec(req).await;
 
         // TODO: make sure this is super fast or do it in background.
         if let Err(err) = self.worker_tx.send(worker).await {
@@ -104,8 +103,8 @@ mod tests {
         .await?;
 
         let (res1, res2) = tokio::join!(
-            pool.exec(r#"{"message":"hello world"}"#.to_string()),
-            pool.exec(r#"{"message":"hello world"}"#.to_string()),
+            pool.exec(r#"{"message":"hello world"}"#.into()),
+            pool.exec(r#"{"message":"hello world"}"#.into()),
         );
         let (res1, res2) = (res1.unwrap(), res2.unwrap());
 
@@ -128,11 +127,9 @@ mod tests {
 
         b.iter(|| {
             assert_eq!(
-                rt.block_on(
-                    worker.exec(r#"{"message":"hello world"}"#.to_string())
-                )
-                .unwrap(),
-                r#"{"message":"hello world"}"#.to_string(),
+                rt.block_on(worker.exec(r#"{"message":"hello world"}"#.into()))
+                    .unwrap(),
+                r#"{"message":"hello world"}"#.into(),
             );
         });
 

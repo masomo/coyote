@@ -21,10 +21,7 @@ pub struct Opt {
 }
 
 impl Opt {
-    pub fn args() -> Self
-    where
-        Self: Sized,
-    {
+    pub fn args() -> Self {
         Opt::from_args()
     }
 }

@@ -26,8 +26,20 @@ enum MessageType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Request(pub Vec<u8>);
 
+impl From<&str> for Request {
+    fn from(req: &str) -> Self {
+        Self(req.as_bytes().to_vec())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response(pub Vec<u8>);
+
+impl From<&str> for Response {
+    fn from(req: &str) -> Self {
+        Self(req.as_bytes().to_vec())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
@@ -42,10 +54,8 @@ impl Message {
 
     pub async fn write_to(
         self,
-        dst: impl AsyncWrite,
+        mut dst: impl AsyncWrite + Unpin,
     ) -> Result<()> {
-        tokio::pin!(dst);
-
         match self {
             Message::Identity(id) => {
                 let mut buf = Vec::with_capacity(Message::HEADER_SIZE);
@@ -67,12 +77,10 @@ impl Message {
         // NOTE: we are calling `write_all` multiple times because writes
         // are buffered and will flushed at the end.
         async fn write_u8_vec(
-            dst: impl AsyncWrite,
+            mut dst: impl AsyncWrite + Unpin,
             ty: MessageType,
             buf: Vec<u8>,
         ) -> Result<()> {
-            tokio::pin!(dst);
-
             let mut header = Vec::with_capacity(Message::HEADER_SIZE);
             header.push(ty as u8);
             header.extend(&buf.len().to_be_bytes());
@@ -84,9 +92,7 @@ impl Message {
         }
     }
 
-    pub async fn read_from(src: impl AsyncRead) -> Result<Message> {
-        tokio::pin!(src);
-
+    pub async fn read_from(mut src: impl AsyncRead + Unpin) -> Result<Message> {
         let mut header = vec![0u8; Message::HEADER_SIZE];
         src.read_exact(&mut header).await?;
 
@@ -114,10 +120,8 @@ impl Message {
 
         async fn read_u8_vec(
             size: usize,
-            src: impl AsyncRead,
+            mut src: impl AsyncRead + Unpin,
         ) -> Result<Vec<u8>> {
-            tokio::pin!(src);
-
             let mut buf = vec![0; size];
             src.read_exact(&mut buf).await?;
 
@@ -149,7 +153,7 @@ mod tests {
 
     message_send_receive_tests! {
         identity: Message::Identity(42),
-        request: Message::Request(Request("hello world req".as_bytes().to_vec())),
-        response: Message::Response(Response("hello world res".as_bytes().to_vec())),
+        request: Message::Request("hello world req".into()),
+        response: Message::Response("hello world res".into()),
     }
 }

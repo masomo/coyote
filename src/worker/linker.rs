@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::{
@@ -15,7 +14,7 @@ use tokio_stream::{
     StreamExt,
 };
 
-use crate::ipc::{
+use super::ipc::{
     Connection,
     Pid,
 };
@@ -27,7 +26,7 @@ pub struct Linker {
 
 impl Linker {
     pub fn new(
-        connections: Pin<Box<dyn Stream<Item = Connection> + Send>>
+        connections: impl Stream<Item = Connection> + Send + Unpin + 'static
     ) -> Arc<Self> {
         let linker = Arc::new(Self {
             queue:   Mutex::new(vec![]),
@@ -39,7 +38,7 @@ impl Linker {
 
     fn listen(
         self: Arc<Self>,
-        mut connections: Pin<Box<dyn Stream<Item = Connection> + Send>>,
+        mut connections: impl Stream<Item = Connection> + Send + Unpin + 'static,
     ) {
         let linker = self;
         tokio::spawn(async move {
@@ -51,7 +50,7 @@ impl Linker {
                         match waiter.send(conn) {
                             Ok(()) => {}
                             Err(_) => {
-                                log::error!("could not send conn to waiter",);
+                                log::error!("could not send conn to waiter");
                             }
                         }
                         continue 'accept_connections;
@@ -101,7 +100,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::ipc::{
+    use crate::worker::ipc::{
         listen,
         Message,
     };
@@ -110,8 +109,7 @@ mod tests {
     async fn waiting_connection_with_pid() -> Result<()> {
         let socket = "/tmp/coyote.test.sock.3";
         let connections = listen(socket)?;
-
-        let linker = Linker::new(Box::pin(connections));
+        let linker = Linker::new(connections);
 
         let mut client_one = UnixStream::connect(socket).await?;
         Message::Identity(42).write_to(&mut client_one).await?;
