@@ -8,25 +8,25 @@ use std::{
 use anyhow::Result;
 use env_logger::Env;
 use hyper::{
-    service::{
-        make_service_fn,
-        service_fn,
-    },
-    StatusCode,
-};
-use hyper::{
+    header,
     Body,
     Method,
     Request,
     Response,
     Server,
 };
+use hyper::{
+    service::{
+        make_service_fn,
+        service_fn,
+    },
+    StatusCode,
+};
 
 #[macro_use]
 extern crate num_derive;
 extern crate test;
 
-mod ipc;
 mod opt;
 mod worker;
 
@@ -37,9 +37,14 @@ async fn handle(
     match (req.method(), req.uri().path()) {
         (&Method::GET, path) if path.starts_with("/hello/") => {
             let name = path.trim_start_matches("/hello/");
-            let response =
-                pool.exec(format!(r#"{{"name":"{}"}}"#, name)).await?;
-            Ok(Response::new(Body::from(response)))
+            let response = pool
+                .exec(format!(r#"{{"name":"{}"}}"#, name).as_str().into())
+                .await?;
+            let mut response = Response::new(Body::from(response.0));
+            response
+                .headers_mut()
+                .insert(header::CONTENT_TYPE, "application/json".parse()?);
+            Ok(response)
         }
         _ => {
             let mut not_found = Response::default();

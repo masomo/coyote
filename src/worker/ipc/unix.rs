@@ -1,10 +1,9 @@
 use std::time::Duration;
 
 use anyhow::{
-    anyhow,
+    bail,
     Result,
 };
-
 use tokio::net::{
     UnixListener,
     UnixStream,
@@ -43,12 +42,7 @@ impl Connection {
 
         let pid = match message {
             Message::Identity(pid) => pid,
-            _ => {
-                return Err(anyhow!(
-                    "expected identity message got {:?}",
-                    message
-                ));
-            }
+            _ => bail!("expected identity message got {:?}", message),
         };
 
         Ok(Self { pid, stream })
@@ -66,7 +60,7 @@ impl Connection {
 
         match Message::read_from(&mut self.stream).await? {
             Message::Response(response) => Ok(response),
-            message => Err(anyhow!("unexpected message: {:?}", message)),
+            message => bail!("unexpected message: {:?}", message),
         }
     }
 }
@@ -118,7 +112,6 @@ mod tests {
     #[tokio::test]
     async fn listening_connections() -> Result<()> {
         let socket = "/tmp/coyote.test.sock.1";
-
         let mut connections = listen(socket)?;
 
         let client = UnixStream::connect(socket).await?;
@@ -149,23 +142,17 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-            assert_eq!(
-                req,
-                Message::Request(Request(
-                    "hello world req".as_bytes().to_vec()
-                ))
-            );
+            assert_eq!(req, Message::Request("hello world req".into()));
 
-            Message::Response(Response("hello world res".as_bytes().to_vec()))
+            Message::Response("hello world res".into())
                 .write_to(&mut client)
                 .await
                 .unwrap();
         });
 
-        let response = conn
-            .round_trip(Request("hello world req".as_bytes().to_vec()))
-            .await?;
-        assert_eq!(response, Response("hello world res".as_bytes().to_vec()));
+        let response =
+            conn.round_trip(Request("hello world req".into())).await?;
+        assert_eq!(response, Response("hello world res".into()));
 
         Ok(())
     }

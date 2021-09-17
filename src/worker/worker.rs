@@ -5,16 +5,16 @@ use anyhow::{
     anyhow,
     Result,
 };
-
 use tokio::process::{
     Child,
     Command,
 };
 use tokio::time::timeout;
 
-use crate::ipc::{
+use super::ipc::{
     Connection,
     Request,
+    Response,
 };
 use crate::worker::Linker;
 
@@ -51,14 +51,9 @@ impl Worker {
 
     pub async fn exec(
         &mut self,
-        req: &str,
-    ) -> Result<String> {
-        let res = self
-            .conn
-            .round_trip(Request(req.as_bytes().to_vec()))
-            .await?;
-        String::from_utf8(res.0)
-            .map_err(|err| anyhow!("expected utf-8 response: {}", err))
+        req: Request,
+    ) -> Result<Response> {
+        self.conn.round_trip(req).await
     }
 }
 
@@ -68,21 +63,23 @@ mod tests {
     use tokio::runtime::Runtime;
 
     use super::*;
-    use crate::ipc::listen;
-    use crate::worker::Linker;
+    use crate::worker::{
+        ipc::listen,
+        Linker,
+    };
 
     #[tokio::test]
     async fn communicating_with_worker() -> Result<()> {
         let socket = "/tmp/coyote.test.sock.4";
         let script = "./src/worker/test_data/echo_worker.php";
         let connections = listen(socket)?;
-        let linker = Linker::new(Box::pin(connections));
+        let linker = Linker::new(connections);
 
         let mut worker = Worker::new(script, socket, linker).await?;
 
         assert_eq!(
-            worker.exec(r#"{"message":"hello world"}"#).await?,
-            r#"{"message":"hello world"}"#.to_string(),
+            worker.exec(r#"{"message":"hello world"}"#.into()).await?,
+            r#"{"message":"hello world"}"#.into(),
         );
 
         Ok(())
@@ -96,15 +93,15 @@ mod tests {
         let socket = "/tmp/coyote.test.sock.5";
         let script = "./src/worker/test_data/echo_worker.php";
         let connections = listen(socket)?;
-        let linker = Linker::new(Box::pin(connections));
+        let linker = Linker::new(connections);
 
         let mut worker = rt.block_on(Worker::new(script, socket, linker))?;
 
         b.iter(|| {
             assert_eq!(
-                rt.block_on(worker.exec(r#"{"message":"hello world"}"#))
+                rt.block_on(worker.exec(r#"{"message":"hello world"}"#.into()))
                     .unwrap(),
-                r#"{"message":"hello world"}"#.to_string(),
+                r#"{"message":"hello world"}"#.into(),
             );
         });
 

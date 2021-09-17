@@ -1,4 +1,4 @@
-# coyote
+# Coyote
 
 Blazing Fast PHP application server
 
