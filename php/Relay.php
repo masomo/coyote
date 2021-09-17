@@ -24,6 +24,7 @@ class Relay
         if (!$fp) {
             throw new \Exception(sprintf("could not connect to %s: %s (%d)", $sock, $errstr, $errno));
         }
+        stream_set_timeout($fp, -1);
         $this->fp = $fp;
         $this->sendIdentity();
     }
